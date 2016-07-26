@@ -47,6 +47,7 @@ executable simple-example
         base >= 4.7 && < 5
       , iso-svg
       , lens
+      , linear
       , mtl
       , text
       , virtual-hom
