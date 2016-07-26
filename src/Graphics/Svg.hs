@@ -25,6 +25,9 @@ svg = svgElm "svg"
 circle :: Elem cb ()
 circle = svgElm "circle"
 
+line :: Elem cb ()
+line = svgElm "line"
+
 path :: Elem cb ()
 path = svgElm "path"
 
