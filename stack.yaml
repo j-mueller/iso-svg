@@ -3,7 +3,7 @@ packages:
 - '.'
 - location:
     git: https://github.com/j-mueller/virtual-hom
-    commit: 939b34d38d56e8b2d927055339ece0602525ed83
+    commit: 08468d6286ee0cf55a1dcdcaba4f499ef6192739
 
 extra-deps:
 - async-2.0.2
