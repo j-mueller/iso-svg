@@ -17,6 +17,9 @@ xmlns = "http://www.w3.org/2000/svg"
 svgElm :: Text -> Elem cb ()
 svgElm t = elm t & namespace .~ xmlns
 
+g :: Elem cb ()
+g = svgElm "g"
+
 svg :: Elem cb ()
 svg = svgElm "svg" 
   & attributes . at "version" ?~ "1.1"

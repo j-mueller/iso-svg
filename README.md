@@ -1,7 +1,8 @@
 # iso-svg
 
-Experiments with svg
+Isometric projection rendered in SVG
 
+![Cube](images/cube.PNG)
 
 ## How to build
 
@@ -9,8 +10,14 @@ Experiments with svg
 stack setup
 stack build
 ```
-`
+
 * To build the examples, `stack build --flag iso-svg:examples`
+
+## TO DO
+
+* Fix rotation in `isometricProject`
+* Compute normal of a face and use it to determine shading
+* Scene graph, camera, etc.
 
 ## License
 
