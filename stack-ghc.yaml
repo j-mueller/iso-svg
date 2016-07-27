@@ -1,0 +1,19 @@
+resolver: lts-5.17
+packages:
+- '.'
+- location:
+    git: https://github.com/j-mueller/virtual-hom
+    commit: 08468d6286ee0cf55a1dcdcaba4f499ef6192739
+
+extra-deps:
+- async-2.0.2
+
+# Override default flag values for local packages and extra-deps
+flags:
+  iso-svg:
+    examples: false
+  virtual-hom:
+    js: false
+
+# Extra package databases containing global packages
+extra-package-dbs: []

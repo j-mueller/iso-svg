@@ -17,7 +17,11 @@ stack build
 
 * Fix rotation in `isometricProject`
 * Compute normal of a face and use it to determine shading
-* Scene graph, camera, etc.
+* Evaluate scene graph 
+
+## DONE
+
+* ~~Scene graph, camera, etc.~~
 
 ## License
 
