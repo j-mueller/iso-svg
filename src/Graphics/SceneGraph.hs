@@ -28,6 +28,19 @@ data SceneGraphF a b =
   | Cam (Camera a) 
   deriving (Eq, Ord, Show, Functor)
 
+mapA :: (a -> c) -> SceneGraphF a b -> SceneGraphF c b
+mapA f gr = case gr of
+  EmptyGraph -> EmptyGraph
+  Geo g -> Geo $ fmap f g
+  Group b -> Group b
+  MatrixTransform m b -> MatrixTransform (fmap (fmap f) m) b
+  Colour s b -> Colour s b
+  Light -> Light
+  Cam cm -> Cam $ fmap f cm
+
+-- Scene graph type
+newtype SceneGraph a = SceneGraph{ _unSceneGraph :: Fix (SceneGraphF a) }
+
 instance Monoid (SceneGraph a) where
     mempty = empty
     mappend l r = case (_unSceneGraph l, _unSceneGraph r) of
@@ -38,8 +51,9 @@ instance Monoid (SceneGraph a) where
       (l', Fix (Group b)) -> SceneGraph $ Fix $ Group (l':b)
       (l', r') -> SceneGraph $ Fix $ Group [l', r']
 
--- Scene graph type
-newtype SceneGraph a = SceneGraph{ _unSceneGraph :: Fix (SceneGraphF a) }
+instance Functor SceneGraph where
+  fmap f (SceneGraph g) = SceneGraph $ hmap (mapA f) g
+
 
 -- Combinators
 cube :: Double -> SceneGraph Double
