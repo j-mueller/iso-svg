@@ -15,13 +15,14 @@ stack build
 
 ## TO DO
 
+* Use normal to determine shading
+* Render using a camera
 * Fix rotation in `isometricProject`
-* Compute normal of a face and use it to determine shading
-* Evaluate scene graph 
 
 ## DONE
 
 * ~~Scene graph, camera, etc.~~
+* ~~Evaluate scene graph~~ 
 
 ## License
 
