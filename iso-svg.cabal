@@ -34,7 +34,6 @@ library
     , mtl
     , stm
     , text
-    , unification-fd
     , virtual-hom
   default-language:    Haskell2010
 

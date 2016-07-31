@@ -1,11 +1,14 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Graphics.SceneGraph where
 
 import Control.Lens
-import Data.Functor.Fixedpoint
+import Control.Lens.Plated
+import Data.Data
+import Data.Data.Lens (uniplate)
 import Data.Monoid
+import Data.Typeable
 import Linear.Matrix
 import Linear.V3
 import Linear.V4
@@ -15,16 +18,16 @@ data Triangle a = Triangle {
   _p2 :: V3 a,
   _p3 :: V3 a,
   _normal :: V3 a,
-  _colour :: String
+  _color :: String
 }
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 makeLenses ''Triangle
 
 data Geometry a = 
       Mesh [Triangle a]
     | Cube -- unit cube
-    deriving (Eq, Ord, Show, Functor)
+    deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 makePrisms ''Geometry
 
@@ -62,100 +65,86 @@ applyTransform mx (Triangle p1 p2 p3 normal c) = Triangle p1' p2' p3' normal' c 
   normal' = view _xyz $ mx !* (vector normal) -- point?
 
 data Camera a = Camera { _direction :: V3 a, _name :: String }
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
 makeLenses ''Camera
 
-data SceneGraphF a b =
-  EmptyGraph
-  | Geo (Geometry a)
-  | Group [b]
-  | MatrixTransform (M44 a) b -- row-major 
-  | Colour String b
-  | Light
-  | Cam (Camera a) 
-  deriving (Eq, Ord, Show, Functor)
+data SceneGraph a =
+    EmptyGraph
+    | Group [SceneGraph a]
+    | Geo (Geometry a)
+    | MatrixTransform (M44 a) (SceneGraph a)
+    | Colour String (SceneGraph a)
+    | Light
+    | Cam (Camera a)
+    deriving (Eq, Ord, Show, Functor, Data, Typeable)
 
-makePrisms ''SceneGraphF
-
-mapA :: (a -> c) -> SceneGraphF a b -> SceneGraphF c b
-mapA f gr = case gr of
-  EmptyGraph -> EmptyGraph
-  Geo g -> Geo $ fmap f g
-  Group b -> Group b
-  MatrixTransform m b -> MatrixTransform (fmap (fmap f) m) b
-  Colour s b -> Colour s b
-  Light -> Light
-  Cam cm -> Cam $ fmap f cm
-
--- Scene graph type
-newtype SceneGraph a = SceneGraph{ _unSceneGraph :: Fix (SceneGraphF a) }
-  deriving (Eq, Ord, Show)
+instance Data a => Plated (SceneGraph a) where
+  plate = uniplate
 
 instance Monoid (SceneGraph a) where
-    mempty = empty
-    mappend l r = case (_unSceneGraph l, _unSceneGraph r) of
-      (Fix EmptyGraph, _) -> r
-      (_, Fix EmptyGraph) -> l
-      (Fix (Group a), Fix (Group b)) -> SceneGraph $ Fix $ Group (a ++ b)
-      (Fix (Group a), r') -> SceneGraph $ Fix $ Group (a ++ [r'])
-      (l', Fix (Group b)) -> SceneGraph $ Fix $ Group (l':b)
-      (l', r') -> SceneGraph $ Fix $ Group [l', r']
+    mempty = EmptyGraph
+    mappend l r = case (l, r) of
+      (EmptyGraph, _) -> r
+      (_, EmptyGraph) -> l
+      ((Group a), (Group b)) -> Group (a ++ b)
+      ((Group a), r') -> Group (a ++ [r'])
+      (l', (Group b)) -> Group (l':b)
+      (l', r') -> Group [l', r']
 
-instance Functor SceneGraph where
-  fmap f (SceneGraph g) = SceneGraph $ hmap (mapA f) g
+makePrisms ''SceneGraph
 
--- Combinators
-
--- | Add a unit cube
+-- | Constructors
 cube :: SceneGraph Double
-cube = SceneGraph $ Fix $ Geo Cube
+cube = Geo Cube
 
--- | Assign a colour to objects
-colour' :: SceneGraph a -> String -> SceneGraph a
-colour' g = SceneGraph . Fix . flip Colour (_unSceneGraph g)
+colour :: SceneGraph a -> String -> SceneGraph a
+colour = flip Colour
 
--- | Scale objects by a scalar
 scale :: Num a => SceneGraph a -> a -> SceneGraph a
-scale g = SceneGraph . Fix . flip MatrixTransform (_unSceneGraph g) . scaleM
+scale g = flip MatrixTransform g . scaleM where
+  scaleM factor = factor *!! identity
 
 -- | Translate objects by a vector
 translate :: Num a => SceneGraph a -> V3 a -> SceneGraph a
-translate g = SceneGraph . Fix . flip MatrixTransform (_unSceneGraph g) . translateM
+translate g = flip MatrixTransform g . translateM where
+  translateM t = identity & translation .~ t
 
 -- | Empty scene graph is empty
 empty :: SceneGraph a
-empty = SceneGraph $ Fix EmptyGraph  
+empty = EmptyGraph 
 
 -- | Group a number of elements together
 group :: [SceneGraph a] -> SceneGraph a
-group = SceneGraph . Fix . Group . fmap _unSceneGraph
+group = Group
 
 -- | Add a light
 light :: SceneGraph a
-light = SceneGraph $ Fix Light
+light = Light
 
 -- | Add a named camera
 camera :: V3 a -> String -> SceneGraph a
-camera dir = SceneGraph . Fix . Cam . Camera dir
+camera dir = Cam . Camera dir
 
--- Matrix transforms
-translateM :: Num a => V3 a -> M44 a
-translateM t = identity & translation .~ t
 
-scaleM :: Num a => a -> M44 a
-scaleM factor = factor *!! identity
+-- | Rendering
+
+-- | Optimise a scene graph by merging successive matrix transforms
+optimise :: (Num a, Data a) => SceneGraph a -> SceneGraph a
+optimise = transform $ \x -> case x of
+  MatrixTransform m1 (MatrixTransform m2 a) -> MatrixTransform (m1 !*! m2) a
+  _ -> x
 
 -- Evaluate scene graphs
-triangles :: (Fractional a, Num a) => SceneGraph a -> [Triangle a]
-triangles = cata t . _unSceneGraph where
-  t g = case g of
-    EmptyGraph -> []
+triangles :: (Data a, Fractional a, Num a) => SceneGraph a -> [Triangle a]
+triangles = para tri where
+  tri a l = case a of
+    MatrixTransform mx _ -> fmap (applyTransform mx) $ concat l
+    Colour cl _ -> fmap (set color cl) $ concat l
     Geo g'     -> toTriangles g'
-    Group ts   -> concat ts  
-    MatrixTransform mx ts -> fmap (applyTransform mx) ts
-    Colour cl ts -> fmap (set colour cl) ts
-    Light -> []
-    Cam _ -> [] 
+    _ -> concat l 
 
-simpleGraph = cube `colour'` "green" `translate` (V3 4 4 4)
+render :: (Data a, Fractional a, Num a) => SceneGraph a -> [Triangle a] -- TODO: Should return primitives (camera, light, mesh) instead
+render = triangles . optimise
+
+simpleGraph = cube `colour` "green" `translate` (V3 4 4 4) `translate` (V3 1 1 1)
